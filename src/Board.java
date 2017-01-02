@@ -5,57 +5,28 @@ import java.util.List;
 
 public class Board {
     private final int size;
-    private final int[][] blocks;
-    private final int[][] SOL_BOARD;
-    private final int[][] SOL_COORDS;
+    private final char[][] blocks;
 
-    public Board(int[][] blocks) {
-        this.size = blocks.length;
-        this.blocks = blocks;
+    // Distance cache values
+    private int man;
 
-        // Initialize the solved board
-        SOL_BOARD = new int[size][size];
+    public Board(int[][] blks) {
+        this.size = blks.length;
+
+        // Copy the argument array into a new array
+        this.blocks = new char[size][size];
         for (int i = 0; i < size; i++)
             for (int j = 0; j < size; j++)
-                SOL_BOARD[i][j] = i == size && j == size ? 0 : size * i + j + 1;
+                this.blocks[i][j] = (char) blks[i][j];
 
-        // Map values to coordinates for manhattan calculation
-        SOL_COORDS = new int[size * size][2];
+        // Calculate the manhattan distance
+        this.man = 0;
         for (int i = 0; i < size; i++)
-            for (int j = 0; j < size; j++)
-                if (size * i + j + 1 < 9) {
-                    SOL_COORDS[size * i + j + 1] = new int[]{i, j};
-                }
-        SOL_COORDS[0] = new int[] { size, size };
-    }
-
-    public static void main(String[] args) {
-        int[][] board = new int[][] {
-                { 8, 1, 3 },
-                { 4, 0, 2 },
-                { 7, 6, 5 }
-        };
-        Board b = new Board(board);
-
-        System.out.println(b.hamming());
-        System.out.println(b.manhattan());
-        System.out.println(b.isGoal());
-        System.out.println(b.equals(new int[][] {
-                { 8, 1, 3 },
-                { 4, 0, 2 },
-                { 7, 6, 5 }
-        }));
-
-        System.out.println("Board");
-        System.out.println(b);
-        System.out.println("Neighbors");
-        for (Board bs : b.neighbors()) {
-            System.out.println("manhattan: " + bs.manhattan());
-            System.out.println(bs);
-        }
-
-        System.out.println("Twin");
-        System.out.println(b.twin());
+            for (int j = 0; j < size; j++) {
+                int s = blocks[i][j];
+                if (s != 0)
+                    this.man += distance(i, j, (s - 1) / size, (s - 1) % size);
+            }
     }
 
     public int dimension() {
@@ -66,55 +37,70 @@ public class Board {
         int h = 0;
         for (int i = 0; i < size; i++)
             for (int j = 0; j < size; j++)
-                h += blocks[i][j] == 0 || blocks[i][j] == SOL_BOARD[i][j] ? 0 : 1;
+                h += blocks[i][j] == 0 || blocks[i][j] == sol(i, j) ? 0 : 1;
         return h;
     }
 
     public int manhattan() {
-        int m = 0;
-        for (int i = 0; i < size; i++)
-            for (int j = 0; j < size; j++) {
-                int s = blocks[i][j];
-                int[] c = SOL_COORDS[s];
-                if (s != 0)
-                    m += distance(i, j, c[0], c[1]);
-            }
-        return m;
+        return man;
+    }
+
+    // The solution value for coordinate (i, j)
+    private int sol(int i, int j) {
+        return i == size - 1 && j == size - 1 ? 0 : size * i + j + 1;
+    }
+
+    // Taxicab distance between two points
+    private int distance(int i, int j, int k, int l) {
+        return Math.abs(i - k) + Math.abs(j - l);
     }
 
     public boolean isGoal() {
-        return this.equals(SOL_BOARD);
+        return man == 0;
     }
 
     public Board twin() {
+        int[][] nblocks = new int[size][size];
+        for (int i = 0; i < size; i++)
+            for (int j = 0; j < size; j++)
+                nblocks[i][j] = blocks[i][j];
+
         // Find a non-zero coordinate
         int i, j;
         do {
             i = StdRandom.uniform(0, size);
             j = StdRandom.uniform(0, size);
-        } while (blocks[i][j] == 0);
+        } while (nblocks[i][j] == 0);
 
         // Find another set
         int k, l;
         do {
             k = StdRandom.uniform(0, size);
             l = StdRandom.uniform(0, size);
-        } while (blocks[k][l] == 0 || (k == i && l == j));
+        } while (nblocks[k][l] == 0 || (k == i && l == j));
 
         // Swap the blocks
-        swap(i, j, k, l);
+        int temp = nblocks[i][j];
+        nblocks[i][j] = nblocks[k][l];
+        nblocks[k][l] = temp;
 
-        return this;
+        return new Board(nblocks);
     }
 
     public boolean equals(Object y) {
-        if (!(y instanceof int[][]))
+        if (y == this)
+            return true;
+        if (y == null || y.getClass() != this.getClass())
             return false;
 
-        int[][] by = (int[][]) y;
+        Board by = (Board) y;
+        // Board must be the same dimension
+        if (by.dimension() != this.dimension())
+            return false;
+
         for (int i = 0; i < size; i++)
             for (int j = 0; j < size; j++)
-                if (blocks[i][j] != by[i][j])
+                if (this.blocks[i][j] != by.blocks[i][j])
                     return false;
         return true;
     }
@@ -138,17 +124,6 @@ public class Board {
         return neighbors;
     }
 
-    public String toString() {
-        StringBuilder b = new StringBuilder();
-        b.append(size + "\n");
-        for (int i = 0; i < size; i++) {
-            for (int j = 0; j < size; j++)
-                b.append(" " + blocks[i][j]);
-            b.append("\n");
-        }
-        return b.toString();
-    }
-
     private Board createSwapBoard(int[] empty, int[] coord) {
         // Copy blocks
         int[][] nblocks = new int[size][size];
@@ -164,24 +139,55 @@ public class Board {
     }
 
     private boolean testBounds(int[] inds) {
-        return inds[0] >= 0 && inds[0] < size && inds[1] >=0 && inds[1] < size;
+        return inds[0] >= 0 && inds[0] < size && inds[1] >= 0 && inds[1] < size;
     }
 
-    private int[] findEmpty(int[][] blocks) {
+    private int[] findEmpty(char[][] blks) {
         for (int i = 0; i < size; i++)
             for (int j = 0; j < size; j++)
-                if (blocks[i][j] == 0)
+                if (blks[i][j] == 0)
                     return new int[] { i, j };
-        return null;
+        throw new IllegalArgumentException("No empty space found!");
     }
 
-    private int distance(int i, int j, int k, int l) {
-        return Math.abs(i - k) + Math.abs(j - l);
+    public String toString() {
+        StringBuilder b = new StringBuilder();
+        b.append(size + "\n");
+        for (int i = 0; i < size; i++) {
+            for (int j = 0; j < size; j++)
+                b.append(" " + (int) blocks[i][j]);
+            b.append("\n");
+        }
+        return b.toString();
     }
 
-    private void swap(int i, int j, int k, int l) {
-        int temp = blocks[i][j];
-        blocks[i][j] = blocks[k][l];
-        blocks[k][l] = temp;
+    public static void main(String[] args) {
+        int[][] board = new int[][] {
+                { 5, 13, 14,  0 },
+                { 3, 10,  2, 11 },
+                { 9, 15, 12,  1 },
+                { 7,  8,  4,  6 }
+        };
+        Board b = new Board(board);
+
+        System.out.println("hamming: " + b.hamming());
+        System.out.println("manhattan: " + b.manhattan());
+        System.out.println(b.isGoal());
+        System.out.println(b.equals(new Board(new int[][] {
+                { 8, 1, 3 },
+                { 4, 0, 2 },
+                { 7, 6, 5 }
+        })));
+
+        System.out.println("Board");
+        System.out.println(b);
+        System.out.println("Neighbors");
+        for (Board bs : b.neighbors()) {
+            System.out.println("manhattan: " + bs.manhattan());
+            System.out.println(bs);
+        }
+
+        System.out.println("Twin");
+        System.out.println(b.twin());
     }
 }

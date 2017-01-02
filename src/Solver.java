@@ -1,69 +1,79 @@
 import edu.princeton.cs.algs4.In;
 import edu.princeton.cs.algs4.MinPQ;
+import edu.princeton.cs.algs4.Stack;
 import edu.princeton.cs.algs4.StdOut;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-
 public class Solver {
-    private List<Board> solved;
-    private int moves;
+    private Stack<Board> solvedBoards;
+    private boolean solvable;
 
     public Solver(Board initial) {
-        Board board = initial;
-        MinPQ<Board> q;
+        SearchNode board = new SearchNode(initial, 0, null),
+                twin = new SearchNode(initial.twin(), 0, null),
+                del, tDel;
 
-        // List of steps to solve board
-        solved = new ArrayList<>();
-        solved.add(board);
+        solvable = false;
 
-        moves = 0;
+        // Priority queues for twin board and initial board
+        MinPQ<SearchNode> q = new MinPQ<>();
+        MinPQ<SearchNode>  tq = new MinPQ<>();
 
-        int i = 0;
-        //while (!board.isGoal() || i++ < 10) {
-            q = new MinPQ<>((o1, o2) -> Integer.compare(o1.manhattan() + moves, o2.manhattan() + moves));
-            for (Board b : board.neighbors())
-                q.insert(b);
+        // Add the initial board to the priority queues
+        q.insert(board);
+        tq.insert(twin);
+        while (!board.board().isGoal() && !twin.board().isGoal()) {
+            // Delete the minimum nodes
+            del = q.delMin();
+            tDel = tq.delMin();
 
-            // Find the minimum element
-            board = q.min();
+            // Insert original board neighbors
+            for (Board b : board.board().neighbors())
+                if (!b.equals(board.previous() == null ? null : board.previous().board()))
+                    q.insert(new SearchNode(b, board.moves() + 1, board));
 
-            // Add to the sequence of solution steps
-            solved.add(board);
+            // Insert twin board neighbors
+            for (Board b : twin.board().neighbors())
+                if (!b.equals(twin.previous() == null ? null : twin.previous().board()))
+                    tq.insert(new SearchNode(b, twin.moves() + 1, twin));
 
-            // Increment moves
-            moves++;
-        //}
+            // Find the minimum elements for twin and board
+            board = del;
+            twin = tDel;
+        }
+
+        if (board.board().isGoal()) {
+            // Set solvable to true
+            solvable = true;
+
+            // Copy the solution by working backward along the pointers starting with the goal board
+            solvedBoards = new Stack<>();
+            solvedBoards.push(board.board());
+            while ((board = board.previous()) != null)
+                solvedBoards.push(board.board());
+        }
     }
 
     public boolean isSolvable() {
-        return true;
+        return solvable;
     }
 
     public int moves() {
-        return moves;
+        return isSolvable() ? solvedBoards.size() - 1 : -1;
     }
 
     public Iterable<Board> solution() {
-        // Defensive copy
-        return new ArrayList<>(solved);
+        return solvedBoards;
     }
 
     public static void main(String[] args) {
         // create initial board from file
-/*        In in = new In(args[0]);
+        In in = new In(args[0]);
         int n = in.readInt();
         int[][] blocks = new int[n][n];
         for (int i = 0; i < n; i++)
             for (int j = 0; j < n; j++)
                 blocks[i][j] = in.readInt();
-        Board initial = new Board(blocks);*/
-        Board initial = new Board(new int[][] {
-                { 8, 1, 3 },
-                { 4, 0, 2 },
-                { 7, 6, 5 }
-        });
+        Board initial = new Board(blocks);
 
         // solve the puzzle
         Solver solver = new Solver(initial);
@@ -75,6 +85,37 @@ public class Solver {
             StdOut.println("Minimum number of moves = " + solver.moves());
             for (Board board : solver.solution())
                 StdOut.println(board);
+        }
+    }
+
+    private static class SearchNode implements Comparable<SearchNode> {
+        private final Board board;
+        private final SearchNode previous;
+        private final int moves;
+
+        public SearchNode(Board board, int moves, SearchNode previous) {
+            this.board = board;
+            this.moves = moves;
+            this.previous = previous;
+        }
+
+        public Board board() {
+            return board;
+        }
+
+        public SearchNode previous() {
+            return previous;
+        }
+
+        public int moves() {
+            return moves;
+        }
+
+        @Override
+        public int compareTo(SearchNode o) {
+            int m1 = this.board().manhattan() + this.moves();
+            int m2 = o.board().manhattan() + o.moves();
+            return Integer.compare(m1, m2);
         }
     }
 }
